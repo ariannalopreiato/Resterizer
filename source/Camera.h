@@ -45,8 +45,7 @@ namespace dae
 		void CalculateViewMatrix()
 		{
 			viewMatrix = Matrix::CreateLookAtLH(origin, forward, Vector3::UnitY);
-			invViewMatrix = Matrix::Inverse(viewMatrix);
-			
+			invViewMatrix = Matrix::Inverse(viewMatrix);		
 			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
 		}
 
@@ -86,9 +85,9 @@ namespace dae
 				if ((mouseState & SDL_BUTTON_RMASK) != 0)
 				{
 					if (mouseY < 0)
-						origin.y += moveFactor;
-					if (mouseY > 0)
 						origin.y -= moveFactor;
+					if (mouseY > 0)
+						origin.y += moveFactor;
 				}
 				else
 				{
@@ -104,7 +103,7 @@ namespace dae
 			{
 				if ((mouseState & SDL_BUTTON_RMASK) != 0)
 				{
-					totalPitch -= mouseY * deltaTime;
+					totalPitch += mouseY * deltaTime;
 					totalYaw -= mouseX * deltaTime;
 				}
 			}

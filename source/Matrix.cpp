@@ -144,12 +144,10 @@ namespace dae {
 
 	Matrix Matrix::CreateLookAtLH(const Vector3& origin, const Vector3& forward, const Vector3& up)
 	{
-		//TODO W1
 		Matrix out{};
 
-		//auto z{ (forward - origin).Normalized() };
-		auto x{ Vector3::Cross(up, forward).Normalized() };
-		auto y{ Vector3::Cross(forward, x) };
+		Vector3 x{ Vector3::Cross(up, forward).Normalized() };
+		Vector3 y{ Vector3::Cross(forward, x) };
 
 		out.data[0] = { x.x, y.x, forward.x, 0 };
 		out.data[1] = { x.y, y.y, forward.y, 0 };
