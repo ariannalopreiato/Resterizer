@@ -193,9 +193,9 @@ void dae::Renderer::Render_W1_Part3()
 
 	std::vector<Vertex> vertices_ndc
 	{
-		{{0.f, 2.f, 0.f},{}},
-		{{1.f, 0.f, 0.f}, {}},
-		{{-1.f, 0.f, 0.f}, {} }
+		{{0.f, 4.f, 2.f},{1, 0, 0}},
+		{{3.f, -2.f, 2.f}, {0, 1, 0}},
+		{{-3.f, -2.f, 2.f}, {0, 0, 1} }
 	};
 
 	std::vector<Vertex> vertices{ vertices_ndc };
@@ -206,8 +206,11 @@ void dae::Renderer::Render_W1_Part3()
 	{
 		//define the triangle
 		Vector2 v1 = { vertices[i].position.x, vertices[i].position.y }; //top
+		Vertex vertex1 = vertices[i];
 		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //left
+		Vertex vertex2 = vertices[i];
 		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //right
+		Vertex vertex3 = vertices[i];
 
 		for (int px{}; px < m_Width; ++px)
 		{
@@ -232,7 +235,19 @@ void dae::Renderer::Render_W1_Part3()
 				auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
 
 				if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
-					finalColor = { 1.f, 1.f, 1.f };
+				{
+					float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
+
+					//weights
+					float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
+					float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
+					float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+
+					/*Vector2 pInTriangle{ (w1 * v1) + (w2 * v2) + (w3 * v3) };
+					float totalWeight{ w1 + w2 + w3 };*/
+
+					finalColor = { vertex1.color.r * w1, vertex2.color.g * w2, vertex3.color.b * w3 };
+				}
 				else
 					finalColor = { 0.f, 0.f, 0.f };
 
