@@ -46,8 +46,8 @@ void Renderer::Render()
 
 	//RENDER LOGIC
 
-	Render_W1_Part1();
-	//Render_W1_Part2();
+	//Render_W1_Part1();
+	Render_W1_Part2();
 	//Render_W1_Part3();
 	//Render_W1_Part4();
 	//Render_W1_Part5();
@@ -59,7 +59,7 @@ void Renderer::Render()
 	SDL_UpdateWindowSurface(m_pWindow);
 }
 
-void dae::Renderer::Render_W1_Part1()
+void Renderer::Render_W1_Part1()
 {
 	ColorRGB finalColor{};
 
@@ -80,9 +80,9 @@ void dae::Renderer::Render_W1_Part1()
 	for(size_t i = 0; i < vertices_ndc.size(); ++i)
 	{
 		//define the triangle
-		Vector2 v1 = { vertices_ndc[i].x, vertices_ndc[i].y };
-		Vector2 v2 = { vertices_ndc[++i].x, vertices_ndc[i].y };
-		Vector2 v3 = { vertices_ndc[++i].x, vertices_ndc[i].y };
+		Vector2 v1 = { vertices_ndc[i].x, vertices_ndc[i].y }; //top
+		Vector2 v2 = { vertices_ndc[++i].x, vertices_ndc[i].y }; //right
+		Vector2 v3 = { vertices_ndc[++i].x, vertices_ndc[i].y }; //left
 
 		for (int px{}; px < m_Width; ++px)
 		{
@@ -127,9 +127,72 @@ void dae::Renderer::Render_W1_Part1()
 	}
 }
 
-void dae::Renderer::Render_W1_Part2()
+void Renderer::Render_W1_Part2()
 {
+	ColorRGB finalColor{};
 
+	std::vector<Vertex> vertices_ndc
+	{
+		{{0.f, 2.f, 0.f},{}},
+		{{1.f, 0.f, 0.f}, {}},
+		{{-1.f, 0.f, 0.f}, {} }
+	};
+
+	std::vector<Vertex> vertices{ vertices_ndc };
+
+	VertexTransformationFunction(vertices_ndc, vertices);
+
+	for (auto& v : vertices)
+	{
+		//convert the points to raster space
+		v.position.x = ((v.position.x + 1) / 2) * m_Width;
+		v.position.y = ((1 - v.position.y) / 2) * m_Height;
+	}
+	
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		//define the triangle
+		Vector2 v1 = { vertices[i].position.x, vertices[i].position.y }; //top
+		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //left
+		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //right
+
+		for (int px{}; px < m_Width; ++px)
+		{
+			for (int py{}; py < m_Height; ++py)
+			{
+				//pixel position
+				Vector2 position{ float(px), float(py) };
+
+				//edges
+				const Vector2 v1v2{ v2 - v1 };
+				const Vector2 v2v3{ v3 - v2 };
+				const Vector2 v3v1{ v1 - v3 };
+
+				//vector from vertex to pixel
+				const Vector2 vertexToPixel1{ position - v1 };
+				const Vector2 vertexToPixel2{ position - v2 };
+				const Vector2 vertexToPixel3{ position - v3 };
+
+				//cross of vertex to pixel and vertex
+				auto signedArea1{ Vector2::Cross(v1v2, vertexToPixel1) };
+				auto signedArea2{ Vector2::Cross(v2v3, vertexToPixel2) };
+				auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
+
+				if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+					finalColor = { 1.f, 1.f, 1.f };
+				else
+					finalColor = { 0.f, 0.f, 0.f };
+
+				//Update Color in Buffer
+				finalColor.MaxToOne();
+
+				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+					static_cast<uint8_t>(finalColor.r * 255),
+					static_cast<uint8_t>(finalColor.g * 255),
+					static_cast<uint8_t>(finalColor.b * 255));
+			}
+		}
+	}
 }
 
 void dae::Renderer::Render_W1_Part3()
@@ -149,7 +212,20 @@ void dae::Renderer::Render_W1_Part5()
 
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
 {
-	//Todo > W1 Projection Stage
+	const float aspectRatio{ float(m_Width) / float(m_Height) };
+
+	for (int i = 0; i < int(vertices_in.size()); ++i)
+	{
+		vertices_out[i].position = m_Camera.viewMatrix.TransformPoint(vertices_in[i].position);
+
+		//from world space to view space
+		vertices_out[i].position.x = vertices_out[i].position.x / vertices_out[i].position.z;
+		vertices_out[i].position.y = vertices_out[i].position.y / vertices_out[i].position.z;
+
+		//from view space to clipping space
+		vertices_out[i].position.x = vertices_out[i].position.x / (aspectRatio * m_Camera.fov);
+		vertices_out[i].position.y = vertices_out[i].position.y / m_Camera.fov;
+	}
 }
 
 bool Renderer::SaveBufferToImage() const
