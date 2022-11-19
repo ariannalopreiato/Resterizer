@@ -59,6 +59,6 @@ namespace dae
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; 
-		void VertexTransformationFunction(const std::vector<Mesh>& vertices_in, std::vector<Vertex_Out>& vertices_out) const;
+		void VertexTransformationFunction(std::vector<Mesh>& meshes_in) const;
 	};
 }
