@@ -8,6 +8,7 @@
 #include "Matrix.h"
 #include "Texture.h"
 #include "Utils.h"
+#include <array>
 
 using namespace dae;
 
@@ -21,8 +22,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pFrontBuffer = SDL_GetWindowSurface(pWindow);
 	m_pBackBuffer = SDL_CreateRGBSurface(0, m_Width, m_Height, 32, 0, 0, 0, 0);
 	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
-
-	//m_pDepthBufferPixels = new float[m_Width * m_Height];
+	m_pDepthBufferPixels = new float[m_Width * m_Height];
 
 	//Initialize Camera
 	m_Camera.Initialize(60.f, { .0f,.0f,-10.f });
@@ -30,7 +30,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 Renderer::~Renderer()
 {
-	//delete[] m_pDepthBufferPixels;
+	delete[] m_pDepthBufferPixels;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -43,14 +43,19 @@ void Renderer::Render()
 	//@START
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
+	SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB(m_pBackBuffer->format, 100, 100, 100));
+	
+	for (int i = 0; i < m_Width * m_Height; ++i)
+		m_pDepthBufferPixels[i] = FLT_MAX;
 
 	//RENDER LOGIC
-
 	//Render_W1_Part1();
 	//Render_W1_Part2();
-	Render_W1_Part3();
+	//Render_W1_Part3();
 	//Render_W1_Part4();
 	//Render_W1_Part5();
+
+	Render_W2_Part1();
 
 	//@END
 	//Update SDL Surface
@@ -59,7 +64,7 @@ void Renderer::Render()
 	SDL_UpdateWindowSurface(m_pWindow);
 }
 
-void Renderer::Render_W1_Part1()
+void Renderer::Render_W1_Part1() //rasterization stage
 {
 	ColorRGB finalColor{};
 
@@ -126,7 +131,7 @@ void Renderer::Render_W1_Part1()
 		}
 	}
 }
-void Renderer::Render_W1_Part2()
+void Renderer::Render_W1_Part2() //projection stage
 {
 	ColorRGB finalColor{};
 
@@ -186,8 +191,7 @@ void Renderer::Render_W1_Part2()
 		}
 	}
 }
-
-void dae::Renderer::Render_W1_Part3()
+void Renderer::Render_W1_Part3() //barycentric coordinates 
 {
 	ColorRGB finalColor{};
 
@@ -207,9 +211,9 @@ void dae::Renderer::Render_W1_Part3()
 		//define the triangle
 		Vector2 v1 = { vertices[i].position.x, vertices[i].position.y }; //top
 		Vertex vertex1 = vertices[i];
-		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //left
+		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //right
 		Vertex vertex2 = vertices[i];
-		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //right
+		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //left
 		Vertex vertex3 = vertices[i];
 
 		for (int px{}; px < m_Width; ++px)
@@ -262,15 +266,327 @@ void dae::Renderer::Render_W1_Part3()
 		}
 	}
 }
-
-void dae::Renderer::Render_W1_Part4()
+void Renderer::Render_W1_Part4()
 {
+	ColorRGB finalColor{};
+	
+	std::vector<Vertex> vertices_ndc
+	{
+		//triangle 1
+		{{0.f, 2.f, 0.f}, {1, 0, 0}},
+		{{1.5f, -1.f, 0.f}, {1, 0, 0}},
+		{{-1.5f, -1.f, 0.f}, {1, 0, 0}},
 
+		//triangle 2
+		{{0.f, 4.f, 2.f},{1, 0, 0}},
+		{{3.f, -2.f, 2.f}, {0, 1, 0}},
+		{{-3.f, -2.f, 2.f}, {0, 0, 1} }
+	};
+
+	//convert all the vertices
+	std::vector<Vertex> vertices{ vertices_ndc };
+	VertexTransformationFunction(vertices_ndc, vertices);
+
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		//define the triangle
+		Vector2 v1 = { vertices[i].position.x, vertices[i].position.y }; //top
+		Vertex vertex1 = vertices[i];
+
+		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //right
+		Vertex vertex2 = vertices[i];
+
+		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //left
+		Vertex vertex3 = vertices[i];
+
+		for (int px{}; px < m_Width; ++px)
+		{
+			for (int py{}; py < m_Height; ++py)
+			{
+				//pixel position
+				Vector2 position{ float(px), float(py) };
+
+				//edges
+				const Vector2 v1v2{ v2 - v1 };
+				const Vector2 v2v3{ v3 - v2 };
+				const Vector2 v3v1{ v1 - v3 };
+
+				//vector from vertex to pixel
+				const Vector2 vertexToPixel1{ position - v1 };
+				const Vector2 vertexToPixel2{ position - v2 };
+				const Vector2 vertexToPixel3{ position - v3 };
+
+				//cross of vertex to pixel and vertex
+				auto signedArea1{ Vector2::Cross(v1v2, vertexToPixel1) };
+				auto signedArea2{ Vector2::Cross(v2v3, vertexToPixel2) };
+				auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
+
+				//if pixel is in triangle
+				if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+				{
+					float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
+
+					//weights
+					float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
+					float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
+					float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+
+					float depth{ vertex1.position.z * w1 + vertex2.position.z * w2 + vertex3.position.z * w3 };
+					
+					int currentPixel{ px + py * m_Width };
+					if (currentPixel < m_Width * m_Height)
+					{
+						if (depth < m_pDepthBufferPixels[currentPixel])
+						{
+							m_pDepthBufferPixels[currentPixel] = depth;
+							finalColor = w1 * vertex1.color + w2 * vertex2.color + w3 * vertex3.color;
+
+							//Update Color in Buffer
+							m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+								static_cast<uint8_t>(finalColor.r * 255),
+								static_cast<uint8_t>(finalColor.g * 255),
+								static_cast<uint8_t>(finalColor.b * 255));
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
-void dae::Renderer::Render_W1_Part5()
+void Renderer::Render_W1_Part5()
 {
+	ColorRGB finalColor{};
 
+	std::vector<Vertex> vertices_ndc
+	{
+		//triangle 1
+		{{0.f, 2.f, 0.f}, {1, 0, 0}},
+		{{1.5f, -1.f, 0.f}, {1, 0, 0}},
+		{{-1.5f, -1.f, 0.f}, {1, 0, 0}},
+
+		//triangle 2
+		{{0.f, 4.f, 2.f},{1, 0, 0}},
+		{{3.f, -2.f, 2.f}, {0, 1, 0}},
+		{{-3.f, -2.f, 2.f}, {0, 0, 1} }
+	};
+
+	//convert all the vertices
+	std::vector<Vertex> vertices{ vertices_ndc };
+	VertexTransformationFunction(vertices_ndc, vertices);
+
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		//define the triangle
+		Vector2 v1 = { vertices[i].position.x, vertices[i].position.y }; //top
+		Vertex vertex1 = vertices[i];
+
+		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //right
+		Vertex vertex2 = vertices[i];
+
+		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //left
+		Vertex vertex3 = vertices[i];
+
+		std::initializer_list<float> xValues = { vertex1.position.x, vertex2.position.x, vertex3.position.x };
+		std::initializer_list<float> yValues = { vertex1.position.y, vertex2.position.y, vertex3.position.y };
+		//auto smallestX = std::min(xValues);
+		//float smallestY = std::min(yValues);
+		//float largestX = std::min(xValues);
+		//float largestY = std::min(yValues);
+		//const Vector2 topLeft{ smallestX, smallestY };
+		//const Vector2 bottomRight{ largestX, largestY };
+
+		//for (int px{ smallestX }; px < largestX; ++px)
+		//{
+		//	for (int py{ smallestY }; py < largestY; ++py)
+		//	{
+		//		//pixel position
+		//		Vector2 position{ float(px), float(py) };
+
+		for (int px{}; px < m_Width; ++px)
+		{
+			for (int py{}; py < m_Height; ++py)
+			{
+				//pixel position
+				Vector2 position{ float(px), float(py) };
+
+				//edges
+				const Vector2 v1v2{ v2 - v1 };
+				const Vector2 v2v3{ v3 - v2 };
+				const Vector2 v3v1{ v1 - v3 };
+
+				//vector from vertex to pixel
+				const Vector2 vertexToPixel1{ position - v1 };
+				const Vector2 vertexToPixel2{ position - v2 };
+				const Vector2 vertexToPixel3{ position - v3 };
+
+				//cross of vertex to pixel and vertex
+				auto signedArea1{ Vector2::Cross(v1v2, vertexToPixel1) };
+				auto signedArea2{ Vector2::Cross(v2v3, vertexToPixel2) };
+				auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
+
+				//if pixel is in triangle
+				if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+				{
+					float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
+
+					//weights
+					float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
+					float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
+					float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+
+					float depth{ vertex1.position.z * w1 + vertex2.position.z * w2 + vertex3.position.z * w3 };
+
+					int currentPixel{ px + py * m_Width };
+					if (currentPixel < m_Width * m_Height)
+					{
+						if (depth < m_pDepthBufferPixels[currentPixel])
+						{
+							m_pDepthBufferPixels[currentPixel] = depth;
+							finalColor = w1 * vertex1.color + w2 * vertex2.color + w3 * vertex3.color;
+
+							//Update Color in Buffer
+							m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+								static_cast<uint8_t>(finalColor.r * 255),
+								static_cast<uint8_t>(finalColor.g * 255),
+								static_cast<uint8_t>(finalColor.b * 255));
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void dae::Renderer::Render_W2_Part1()
+{
+	ColorRGB finalColor{};
+
+	//define mesh
+	std::vector<Mesh> meshes_world
+	{
+		Mesh{
+			{
+			Vertex{{-3,3,-2}},
+			Vertex{{0,3,-2}},
+			Vertex{{3,3,-2}},
+			Vertex{{-3,0,-2}},
+			Vertex{{0,0,-2}},
+			Vertex{{3,0,-2}},
+			Vertex{{-3,-3,-2}},
+			Vertex{{0,-3,-2}},
+			Vertex{{3,-3,-2}}
+		},
+		{
+			3,0,4,1,5,2,
+			2,6,
+			6,3,7,4,8,5
+		},
+		PrimitiveTopology::TriangleStrip
+	}
+	};
+
+	//define mesh
+	//std::vector<Mesh> meshes_world
+	//{
+	//	Mesh{
+	//		{
+	//		Vertex{{-3,3,-2}},
+	//		Vertex{{0,3,-2}},
+	//		Vertex{{3,3,-2}},
+	//		Vertex{{-3,0,-2}},
+	//		Vertex{{0,0,-2}},
+	//		Vertex{{3,0,-2}},
+	//		Vertex{{-3,-3,-2}},
+	//		Vertex{{0,-3,-2}},
+	//		Vertex{{3,-3,-2}}
+	//	},
+	//	{
+	//		3,0,1,   1,4,3,   4,1,2,
+	//		2,5,4,   6,3,4,   4,7,6,
+	//		7,4,5,   5,8,7
+	//	},
+	//	PrimitiveTopology::TriangleList	
+	//}
+	//};
+
+	//convert all the vertices
+	std::vector<Vertex_Out> vertices{};
+	VertexTransformationFunction(meshes_world, vertices);
+
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		//define the triangle
+		Vector2 v1 = { vertices[i].position.x, vertices[i].position.y }; //top
+		Vertex_Out vertex1 = vertices[i];
+
+		Vector2 v2 = { vertices[++i].position.x, vertices[i].position.y }; //right
+		Vertex_Out vertex2 = vertices[i];
+
+		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //left
+		Vertex_Out vertex3 = vertices[i];
+
+		for (int px{}; px < m_Width; ++px)
+		{
+			for (int py{}; py < m_Height; ++py)
+			{
+				//pixel position
+				Vector2 position{ float(px), float(py) };
+
+				//edges
+				const Vector2 v1v2{ v2 - v1 };
+				const Vector2 v2v3{ v3 - v2 };
+				const Vector2 v3v1{ v1 - v3 };
+
+				//vector from vertex to pixel
+				const Vector2 vertexToPixel1{ position - v1 };
+				const Vector2 vertexToPixel2{ position - v2 };
+				const Vector2 vertexToPixel3{ position - v3 };
+
+				//cross of vertex to pixel and vertex
+				auto signedArea1{ Vector2::Cross(v1v2, vertexToPixel1) };
+				auto signedArea2{ Vector2::Cross(v2v3, vertexToPixel2) };
+				auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
+
+				//if pixel is in triangle
+				if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+				{
+					float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
+
+					//weights
+					float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
+					float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
+					float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+
+					float depth{ vertex1.position.z * w1 + vertex2.position.z * w2 + vertex3.position.z * w3 };
+
+					int currentPixel{ px + py * m_Width };
+					if (currentPixel < m_Width * m_Height)
+					{
+						if (depth < m_pDepthBufferPixels[currentPixel])
+						{
+							m_pDepthBufferPixels[currentPixel] = depth;
+							finalColor = w1 * vertex1.color + w2 * vertex2.color + w3 * vertex3.color;
+
+							//Update Color in Buffer
+							m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+								static_cast<uint8_t>(finalColor.r * 255),
+								static_cast<uint8_t>(finalColor.g * 255),
+								static_cast<uint8_t>(finalColor.b * 255));
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void dae::Renderer::Render_W2_Part2()
+{
+}
+
+void dae::Renderer::Render_W2_Part3()
+{
 }
 
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
@@ -292,6 +608,38 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_
 		//convert the points to raster space
 		vertices_out[i].position.x = ((vertices_out[i].position.x + 1) / 2) * m_Width;
 		vertices_out[i].position.y = ((1 - vertices_out[i].position.y) / 2) * m_Height;
+
+		vertices_out[i].position.z = vertices_in[i].position.z;
+	}
+}
+
+void Renderer::VertexTransformationFunction(const std::vector<Mesh>& vertices_in, std::vector<Vertex_Out>& vertices_out) const
+{
+	const float aspectRatio{ float(m_Width) / float(m_Height) };
+
+	for (int i = 0; i < int(vertices_in.size()); ++i)
+	{
+		for (const auto& vertex : vertices_in[i].vertices)
+		{
+			 auto v = m_Camera.viewMatrix.TransformPoint(vertex.position);
+			 vertices_out[i].position.x = v.x;
+			 vertices_out[i].position.y = v.y;
+			 vertices_out[i].position.z = v.z;
+
+			//from world space to view space
+			vertices_out[i].position.x = vertices_out[i].position.x / vertices_out[i].position.z;
+			vertices_out[i].position.y = vertices_out[i].position.y / vertices_out[i].position.z;
+
+			//from view space to clipping space
+			vertices_out[i].position.x = vertices_out[i].position.x / (aspectRatio * m_Camera.fov);
+			vertices_out[i].position.y = vertices_out[i].position.y / m_Camera.fov;
+
+			//convert the points to raster space
+			vertices_out[i].position.x = ((vertices_out[i].position.x + 1) / 2) * m_Width;
+			vertices_out[i].position.y = ((1 - vertices_out[i].position.y) / 2) * m_Height;
+
+			vertices_out[i].position.z = vertex.position.z;
+		}
 	}
 }
 
