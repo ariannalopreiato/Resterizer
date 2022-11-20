@@ -53,9 +53,9 @@ void Renderer::Render()
 	//Render_W1_Part2();
 	//Render_W1_Part3();
 	//Render_W1_Part4();
-	//Render_W1_Part5();
+	Render_W1_Part5();
 
-	Render_W2_Part1();
+	//Render_W2_Part1();
 
 	//@END
 	//Update SDL Surface
@@ -353,7 +353,6 @@ void Renderer::Render_W1_Part4()
 		}
 	}
 }
-
 void Renderer::Render_W1_Part5()
 {
 	ColorRGB finalColor{};
@@ -387,69 +386,68 @@ void Renderer::Render_W1_Part5()
 		Vector2 v3 = { vertices[++i].position.x, vertices[i].position.y }; //left
 		Vertex vertex3 = vertices[i];
 
-		std::initializer_list<float> xValues = { vertex1.position.x, vertex2.position.x, vertex3.position.x };
-		std::initializer_list<float> yValues = { vertex1.position.y, vertex2.position.y, vertex3.position.y };
-		//auto smallestX = std::min(xValues);
-		//float smallestY = std::min(yValues);
-		//float largestX = std::min(xValues);
-		//float largestY = std::min(yValues);
-		//const Vector2 topLeft{ smallestX, smallestY };
-		//const Vector2 bottomRight{ largestX, largestY };
-
-		//for (int px{ smallestX }; px < largestX; ++px)
-		//{
-		//	for (int py{ smallestY }; py < largestY; ++py)
-		//	{
-		//		//pixel position
-		//		Vector2 position{ float(px), float(py) };
-
-		for (int px{}; px < m_Width; ++px)
+		Vector2 topLeft{ vertex1.position.x, vertex1.position.y };
+		Vector2 bottomRight{ vertex1.position.x, vertex1.position.y };
+		auto vertices = { vertex2.position, vertex3.position };
+		for (const auto& v : vertices)
 		{
-			for (int py{}; py < m_Height; ++py)
+			topLeft.x = std::min(topLeft.x, v.x);
+			topLeft.y = std::min(topLeft.y, v.y);
+			bottomRight.x = std::max(bottomRight.x, v.x);
+			bottomRight.y = std::max(bottomRight.y, v.y);
+		}
+		
+		if (topLeft.x >= 0 && topLeft.x < m_Width - 1 && bottomRight.x >= 0 && bottomRight.x < m_Width - 1 &&
+			topLeft.y >= 0 && topLeft.y < m_Height - 1 && bottomRight.y >= 0 && bottomRight.y < m_Height - 1)
+		{
+			for (int px{ int(topLeft.x) }; px < int(bottomRight.x); ++px)
 			{
-				//pixel position
-				Vector2 position{ float(px), float(py) };
-
-				//edges
-				const Vector2 v1v2{ v2 - v1 };
-				const Vector2 v2v3{ v3 - v2 };
-				const Vector2 v3v1{ v1 - v3 };
-
-				//vector from vertex to pixel
-				const Vector2 vertexToPixel1{ position - v1 };
-				const Vector2 vertexToPixel2{ position - v2 };
-				const Vector2 vertexToPixel3{ position - v3 };
-
-				//cross of vertex to pixel and vertex
-				auto signedArea1{ Vector2::Cross(v1v2, vertexToPixel1) };
-				auto signedArea2{ Vector2::Cross(v2v3, vertexToPixel2) };
-				auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
-
-				//if pixel is in triangle
-				if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+				for (int py{ int(topLeft.y) }; py < int(bottomRight.y); ++py)
 				{
-					float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
+					//pixel position
+					Vector2 position{ float(px), float(py) };
 
-					//weights
-					float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
-					float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
-					float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+					//edges
+					const Vector2 v1v2{ v2 - v1 };
+					const Vector2 v2v3{ v3 - v2 };
+					const Vector2 v3v1{ v1 - v3 };
 
-					float depth{ vertex1.position.z * w1 + vertex2.position.z * w2 + vertex3.position.z * w3 };
+					//vector from vertex to pixel
+					const Vector2 vertexToPixel1{ position - v1 };
+					const Vector2 vertexToPixel2{ position - v2 };
+					const Vector2 vertexToPixel3{ position - v3 };
 
-					int currentPixel{ px + py * m_Width };
-					if (currentPixel < m_Width * m_Height)
+					//cross of vertex to pixel and vertex
+					auto signedArea1{ Vector2::Cross(v1v2, vertexToPixel1) };
+					auto signedArea2{ Vector2::Cross(v2v3, vertexToPixel2) };
+					auto signedArea3{ Vector2::Cross(v3v1, vertexToPixel3) };
+
+					//if pixel is in triangle
+					if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
 					{
-						if (depth < m_pDepthBufferPixels[currentPixel])
-						{
-							m_pDepthBufferPixels[currentPixel] = depth;
-							finalColor = w1 * vertex1.color + w2 * vertex2.color + w3 * vertex3.color;
+						float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
 
-							//Update Color in Buffer
-							m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-								static_cast<uint8_t>(finalColor.r * 255),
-								static_cast<uint8_t>(finalColor.g * 255),
-								static_cast<uint8_t>(finalColor.b * 255));
+						//weights
+						float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
+						float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
+						float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+
+						float depth{ vertex1.position.z * w1 + vertex2.position.z * w2 + vertex3.position.z * w3 };
+
+						int currentPixel{ px + py * m_Width };
+						if (currentPixel < m_Width * m_Height)
+						{
+							if (depth < m_pDepthBufferPixels[currentPixel])
+							{
+								m_pDepthBufferPixels[currentPixel] = depth;
+								finalColor = w1 * vertex1.color + w2 * vertex2.color + w3 * vertex3.color;
+
+								//Update Color in Buffer
+								m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+									static_cast<uint8_t>(finalColor.r * 255),
+									static_cast<uint8_t>(finalColor.g * 255),
+									static_cast<uint8_t>(finalColor.b * 255));
+							}
 						}
 					}
 				}
@@ -522,6 +520,10 @@ void dae::Renderer::Render_W2_Part1()
 		for (size_t i = 0; i < mesh.indices.size() - 2; ++i)
 		{
 			//define the triangle
+
+			//----------------------------------------------------------------------------------------------------
+			// USING TRIANGLE STRIP
+			//----------------------------------------------------------------------------------------------------
 			/*int count1{};
 			int count2{};
 			if (i % 2 == 0)
@@ -543,7 +545,14 @@ void dae::Renderer::Render_W2_Part1()
 
 			Vector2 v3 = { vertices[mesh.indices[count2]].position.x, vertices[mesh.indices[count2]].position.y };
 			Vertex_Out vertex3 = vertices[mesh.indices[count2]];*/
+			//----------------------------------------------------------------------------------------------------
+			//---------------------------------------------------------------------------------------------------- 
+			//----------------------------------------------------------------------------------------------------
 
+
+			//----------------------------------------------------------------------------------------------------
+			// USING TRIANGLE LIST
+			//----------------------------------------------------------------------------------------------------
 			Vector2 v1 = { vertices[mesh.indices[i]].position.x, vertices[mesh.indices[i]].position.y };
 			Vertex_Out vertex1 = vertices[mesh.indices[i]];
 
@@ -552,6 +561,9 @@ void dae::Renderer::Render_W2_Part1()
 
 			Vector2 v3 = { vertices[mesh.indices[++i]].position.x, vertices[mesh.indices[i]].position.y };
 			Vertex_Out vertex3 = vertices[mesh.indices[i]];
+			//----------------------------------------------------------------------------------------------------
+			//---------------------------------------------------------------------------------------------------- 
+			//----------------------------------------------------------------------------------------------------
 
 			for (int px{}; px < m_Width; ++px)
 			{
