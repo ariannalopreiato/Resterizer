@@ -61,7 +61,7 @@ namespace dae
 		{
 			const float deltaTime = pTimer->GetElapsed();
 
-			moveFactor = 1.f;
+			moveFactor = 0.5f;
 
 			//Keyboard Input
 			const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
