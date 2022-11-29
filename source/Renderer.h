@@ -41,6 +41,12 @@ namespace dae
 		void Render_W2_Part2();
 		void Render_W2_Part3();
 
+		void Render_W3_Part1();
+
+		bool FrustumCulling(const Vertex_Out& vertex);
+
+		void ConvertToRasterSpace(Vertex_Out& vertex);
+
 		bool SaveBufferToImage() const;
 
 	private:
