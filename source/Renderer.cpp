@@ -936,8 +936,7 @@ void dae::Renderer::Render_W3_Part1() //depth interpolation
 		}
 	};
 
-	//convert all the vertices
-	//projetion stage -> vertices to NDC
+	//projection stage -> convert all the vertices to NDC
 	VertexTransformationFunction(meshes_world);
 
 	//for every mesh
@@ -951,34 +950,37 @@ void dae::Renderer::Render_W3_Part1() //depth interpolation
 			//define the triangle
 			//----------------------------------------------------------------------------------------------------
 			// USING TRIANGLE LIST
-			//----------------------------------------------------------------------------------------------------
-			Vector2 v1 = { vertices[mesh.indices[i]].position.x, vertices[mesh.indices[i]].position.y };
-			Vertex_Out vertex1 = vertices[mesh.indices[i]];
-
-			Vector2 v2 = { vertices[mesh.indices[++i]].position.x, vertices[mesh.indices[i]].position.y };
-			Vertex_Out vertex2 = vertices[mesh.indices[i]];
-
-			Vector2 v3 = { vertices[mesh.indices[++i]].position.x, vertices[mesh.indices[i]].position.y };
-			Vertex_Out vertex3 = vertices[mesh.indices[i]];
+			//----------------------------------------------------------------------------------------------------			
+			Vertex_Out vertex1 = vertices[mesh.indices[i]];		
+			Vertex_Out vertex2 = vertices[mesh.indices[++i]];		
+			Vertex_Out vertex3 = vertices[mesh.indices[++i]];
 			//----------------------------------------------------------------------------------------------------
 			//----------------------------------------------------------------------------------------------------
 
 			//check if the vertices are inside the frustum
-			/*if (!FrustumCulling(vertex1) || !FrustumCulling(vertex2) || !FrustumCulling(vertex3))
-				continue;*/
+			if (!FrustumCulling(vertex1) || !FrustumCulling(vertex2) || !FrustumCulling(vertex3))
+				continue;
 
 				//convert the points to raster space
 			ConvertToRasterSpace(vertex1);
 			ConvertToRasterSpace(vertex2);
 			ConvertToRasterSpace(vertex3);
 
+			//edges
+			const Vector2 v1 = { vertex1.position.x, vertex1.position.y };
+			const Vector2 v2 = { vertex2.position.x, vertex2.position.y };
+			const Vector2 v3 = { vertex3.position.x, vertex3.position.y };
+			const Vector2 v1v2{ v2 - v1 };
+			const Vector2 v2v3{ v3 - v2 };
+			const Vector2 v3v1{ v1 - v3 };
+
 			Vector2 topLeft{ };
 			Vector2 bottomRight{ };
 
-			topLeft.x = std::min(vertex3.position.x, std::min(vertex1.position.x, vertex2.position.x));
-			topLeft.y = std::min(vertex3.position.y, std::min(vertex1.position.y, vertex2.position.y));
-			bottomRight.x = std::max(vertex3.position.x, std::max(vertex1.position.x, vertex2.position.x));
-			bottomRight.y = std::max(vertex3.position.y, std::max(vertex1.position.y, vertex2.position.y));
+			topLeft.x = std::min(v3.x, std::min(v1.x, v2.x));
+			topLeft.y = std::min(v3.y, std::min(v1.y, v2.y));
+			bottomRight.x = std::max(v3.x, std::max(v1.x, v2.x));
+			bottomRight.y = std::max(v3.y, std::max(v1.y, v2.y));
 
 			topLeft.x = Clamp(topLeft.x, 0.f, m_Width - 1.f);
 			topLeft.y = Clamp(topLeft.y, 0.f, m_Height - 1.f);
@@ -990,14 +992,9 @@ void dae::Renderer::Render_W3_Part1() //depth interpolation
 				for (int py{ int(topLeft.y) }; py <= int(bottomRight.y); ++py)
 				{
 					//pixel position
-					Vector2 position{ float(px), float(py) };
+					Vector2 position{ float(px), float(py) };					
 
-					//edges
-					const Vector2 v1v2{ v2 - v1 };
-					const Vector2 v2v3{ v3 - v2 };
-					const Vector2 v3v1{ v1 - v3 };
-
-					////vector from vertex to pixel
+					//vector from vertex to pixel
 					const Vector2 vertexToPixel1{ position - v1 };
 					const Vector2 vertexToPixel2{ position - v2 };
 					const Vector2 vertexToPixel3{ position - v3 };
@@ -1053,9 +1050,9 @@ void dae::Renderer::Render_W3_Part1() //depth interpolation
 bool Renderer::FrustumCulling(const Vertex_Out& vertex)
 {
 	//check if vertices are inside the frustum [-1, 1] for x and y, [near, far] for z
-	if (vertex.position.x < -1 && vertex.position.x > 1 &&
-		vertex.position.y < -1 && vertex.position.y > 1 &&
-		vertex.position.z < m_Camera.nearPlane && vertex.position.z > m_Camera.farPlane)
+	if (vertex.position.x < -1 || vertex.position.x > 1 ||
+		vertex.position.y < -1 || vertex.position.y > 1 ||
+		vertex.position.z < m_Camera.nearPlane || vertex.position.z > m_Camera.farPlane)
 	{
 		return false;
 	}
