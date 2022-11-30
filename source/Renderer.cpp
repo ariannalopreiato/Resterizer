@@ -24,10 +24,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
 	m_pDepthBufferPixels = new float[m_Width * m_Height];
 
-	m_pTexture = Texture::LoadFromFile("./Resources/uv_grid_2.png");
+	m_pTexture = Texture::LoadFromFile("./Resources/tuktuk.png");
 
 	//Initialize Camera
-	m_Camera.Initialize({ float(m_Width) / float(m_Height) }, 60.f, { .0f,.0f,-10.f });
+	m_Camera.Initialize({ float(m_Width) / float(m_Height) }, 60.f, { .0f,5.f,-30.f });
 }
 
 Renderer::~Renderer()
@@ -40,6 +40,7 @@ Renderer::~Renderer()
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
+	//m_WorldMatrix.CreateRotationY((cos(pTimer->GetTotal()) + 1.f) / 2.f * PI_2);
 }
 
 void Renderer::Render()
@@ -63,7 +64,8 @@ void Renderer::Render()
 	//Render_W2_Part2();
 	//Render_W2_Part3();
 
-	Render_W3_Part1();
+	//Render_W3_Part1();
+	Render_W3_Part2();
 
 	//@END
 	//Update SDL Surface
@@ -899,7 +901,7 @@ void Renderer::Render_W2_Part3() //depth interpolation
 	}
 }
 
-void dae::Renderer::Render_W3_Part1() //depth interpolation
+void Renderer::Render_W3_Part1() //depth interpolation
 {
 	ColorRGB finalColor{};
 
@@ -1031,6 +1033,129 @@ void dae::Renderer::Render_W3_Part1() //depth interpolation
 									float w{ 1 / ((w1 / vertex1.position.w) + (w2 / vertex2.position.w) + (w3 / vertex3.position.w)) };
 									auto uv = ((vertex1.uv / vertex1.position.w) * w1 + (vertex2.uv / vertex2.position.w) * w2 + (vertex3.uv / vertex3.position.w) * w3) * w;
 									finalColor = m_pTexture->Sample(uv);
+									//finalColor = w1 * vertex1.color + w2 * vertex2.color + w3 * vertex3.color;
+									
+									//Update Color in Buffer
+									m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+										static_cast<uint8_t>(finalColor.r * 255),
+										static_cast<uint8_t>(finalColor.g * 255),
+										static_cast<uint8_t>(finalColor.b * 255));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+void Renderer::Render_W3_Part2() //depth interpolation
+{
+	ColorRGB finalColor{};
+
+	std::vector<Vertex> vertices{};
+	std::vector<uint32_t> indices{};
+	Utils::ParseOBJ("Resources/tuktuk.obj", vertices, indices);
+	//define mesh
+	std::vector<Mesh> meshes_world
+	{
+		Mesh{
+			vertices,
+			indices,
+			PrimitiveTopology::TriangleList,
+		}
+	};
+
+	//projection stage -> convert all the vertices to NDC
+	VertexTransformationFunction(meshes_world);
+
+	//for every mesh
+	for (const auto& mesh : meshes_world)
+	{
+		//all the converted vertices
+		std::vector<Vertex_Out> vertices = mesh.vertices_out;
+
+		for (size_t i = 0; i < mesh.indices.size() - 2; ++i)
+		{
+			//define the triangle
+			//----------------------------------------------------------------------------------------------------
+			// USING TRIANGLE LIST
+			//----------------------------------------------------------------------------------------------------			
+			Vertex_Out vertex1 = vertices[mesh.indices[i]];
+			Vertex_Out vertex2 = vertices[mesh.indices[++i]];
+			Vertex_Out vertex3 = vertices[mesh.indices[++i]];
+			//----------------------------------------------------------------------------------------------------
+			//----------------------------------------------------------------------------------------------------
+
+			//check if the vertices are inside the frustum
+			if (!FrustumCulling(vertex1) || !FrustumCulling(vertex2) || !FrustumCulling(vertex3))
+				continue;
+
+			//convert the points to raster space
+			ConvertToRasterSpace(vertex1);
+			ConvertToRasterSpace(vertex2);
+			ConvertToRasterSpace(vertex3);
+
+			//edges
+			const Vector2 v1 = { vertex1.position.x, vertex1.position.y };
+			const Vector2 v2 = { vertex2.position.x, vertex2.position.y };
+			const Vector2 v3 = { vertex3.position.x, vertex3.position.y };
+			const Vector2 v1v2{ v2 - v1 };
+			const Vector2 v2v3{ v3 - v2 };
+			const Vector2 v3v1{ v1 - v3 };
+
+			Vector2 topLeft{ std::min(v3.x, std::min(v1.x, v2.x)), std::min(v3.y, std::min(v1.y, v2.y)) };
+			Vector2 bottomRight{ std::max(v3.x, std::max(v1.x, v2.x)), std::max(v3.y, std::max(v1.y, v2.y)) };
+
+			topLeft.x = Clamp(topLeft.x, 1.f, m_Width - 1.f);
+			topLeft.y = Clamp(topLeft.y, 1.f, m_Height - 1.f);
+			bottomRight.x = Clamp(bottomRight.x, 1.f, m_Width - 1.f);
+			bottomRight.y = Clamp(bottomRight.y, 1.f, m_Height - 1.f);
+
+			for (int px{ int(topLeft.x) }; px <= int(bottomRight.x); ++px)
+			{
+				for (int py{ int(topLeft.y) }; py <= int(bottomRight.y); ++py)
+				{
+					//pixel position
+					Vector2 position{ float(px), float(py) };
+
+					//cross of vertex to pixel and vertex
+					auto signedArea1{ Vector2::Cross(v1v2, position - v1) };
+					auto signedArea2{ Vector2::Cross(v2v3, position - v2) };
+					auto signedArea3{ Vector2::Cross(v3v1, position - v3) };
+
+					//if pixel is in triangle
+					if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+					{
+						//view space
+						float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
+
+						//weights
+						float w1 = std::abs({ Vector2::Cross(v2v3, position - v2) / 2 / totalArea });
+						float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
+						float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
+
+
+						float depth{ 1 / ((w1 / vertex1.position.z) + (w2 / vertex2.position.z) + (w3 / vertex3.position.z)) };
+
+						int currentPixel{ px + py * m_Width };
+						if (currentPixel < m_Width * m_Height)
+						{
+							//frustum clipping
+							if (depth > 0 && depth < 1)
+							{
+								if (depth < m_pDepthBufferPixels[currentPixel])
+								{
+									m_pDepthBufferPixels[currentPixel] = depth;
+
+									if (m_CurrentTextureMode == TextureMode::texture)
+									{
+										float w{ 1 / ((w1 / vertex1.position.w) + (w2 / vertex2.position.w) + (w3 / vertex3.position.w)) };
+										auto uv = ((vertex1.uv / vertex1.position.w) * w1 + (vertex2.uv / vertex2.position.w) * w2 + (vertex3.uv / vertex3.position.w) * w3) * w;
+										finalColor = m_pTexture->Sample(uv);
+									}
+									else
+										finalColor = { vertex1.color.r * Remap(depth), vertex2.color.g * Remap(depth), vertex3.color.b * Remap(depth) };
 
 									//Update Color in Buffer
 									m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
@@ -1063,6 +1188,29 @@ void dae::Renderer::ConvertToRasterSpace(Vertex_Out& vertex)
 {
 	vertex.position.x = ((vertex.position.x + 1) / 2) * m_Width;
 	vertex.position.y = ((1 - vertex.position.y) / 2) * m_Height;
+}
+
+void dae::Renderer::CycleTexture()
+{
+	switch (m_CurrentTextureMode)
+	{
+	case TextureMode::depthBuffer:
+		m_CurrentTextureMode = TextureMode::texture;
+		break;
+	case TextureMode::texture:
+		m_CurrentTextureMode = TextureMode::depthBuffer;
+	}
+}
+
+float Renderer::Remap(float depth, float min, float max)
+{
+	if (depth < min)
+		return 0.f;
+
+	if (depth > min && depth < max)
+		return 0.5f;
+
+	return 1.f;
 }
 
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const

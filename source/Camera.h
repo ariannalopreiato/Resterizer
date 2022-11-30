@@ -46,7 +46,7 @@ namespace dae
 
 			origin = _origin;
 
-			aspectRatio = _aspectRatio;
+			aspectRatio = _aspectRatio;			
 		}
 
 		void CalculateViewMatrix()
