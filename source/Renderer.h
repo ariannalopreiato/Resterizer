@@ -44,9 +44,13 @@ namespace dae
 		void Render_W3_Part1();
 		void Render_W3_Part2();
 
+		void Render_W4_Part1();
+
 		bool FrustumCulling(const Vertex_Out& vertex);
 
 		void ConvertToRasterSpace(Vertex_Out& vertex);
+
+		ColorRGB PixelShading(const Vertex_Out* vertex);
 
 		void CycleTexture();
 
