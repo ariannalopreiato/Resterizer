@@ -1432,7 +1432,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 	for ( auto& mesh : meshes_in)
 	{
 		mesh.vertices_out.resize(mesh.vertices.size());
-		//mesh.worldMatrix.CreateTranslation(0, 0, 50.f);
+		mesh.worldMatrix.CreateTranslation(0, 0, 50.f);
 		Matrix worldViewProjMatrix = mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix;
 
 		for (int i = 0; i < int(mesh.vertices.size()); ++i)
