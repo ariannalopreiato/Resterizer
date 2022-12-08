@@ -25,22 +25,35 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pDepthBufferPixels = new float[m_Width * m_Height];
 
 	m_pTexture = Texture::LoadFromFile("./Resources/tuktuk.png");
+	m_pNormal = Texture::LoadFromFile("./Resources/vehicle_normal.png");
+	m_pDiffuse = Texture::LoadFromFile("./Resources/vehicle_diffuse.png"); 
+	m_pGloss = Texture::LoadFromFile("./Resources/vehicle_gloss.png");
+	m_pSpecular = Texture::LoadFromFile("./Resources/vehicle_specular.png");
 
 	//Initialize Camera
-	m_Camera.Initialize({ float(m_Width) / float(m_Height) }, 60.f, { .0f,5.f,-30.f });
+	m_Camera.Initialize({ float(m_Width) / float(m_Height) }, 45.f, { 0, 0, 0 });
 }
 
 Renderer::~Renderer()
 {
-	delete m_pTexture;
-	m_pTexture = nullptr;
+	delete m_pNormal;
+	m_pNormal = nullptr;
+
+	delete m_pDiffuse;
+	m_pDiffuse = nullptr;
+
+	delete m_pGloss;
+	m_pGloss = nullptr;
+
+	delete m_pSpecular;
+	m_pSpecular = nullptr;
+
 	delete[] m_pDepthBufferPixels;
 }
 
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
-	m_WorldMatrix.CreateRotationY((cos(pTimer->GetTotal()) + 1.f) / 2.f * PI_2);
 }
 
 void Renderer::Render()
@@ -65,9 +78,9 @@ void Renderer::Render()
 	//Render_W2_Part3();
 
 	//Render_W3_Part1();
-	Render_W3_Part2();
+	//Render_W3_Part2();
 
-	//Render_W4_Part1();
+	Render_W4_Part1();
 
 	//@END
 	//Update SDL Surface
@@ -1191,9 +1204,18 @@ void Renderer::Render_W4_Part1() //shading
 			vertices,
 			indices,
 			PrimitiveTopology::TriangleList,
+			{}, //vertices out
+
+			{ //world matrix
+				{1, 0, 0, 0},
+				{0, 1, 0, 0},
+				{0, 0, 1, 0},
+				{0, 0, 0, 1}
+			}
 		}
 	};
 
+	//m_Meshes = meshes_world;
 	//projection stage -> convert all the vertices to NDC
 	VertexTransformationFunction(meshes_world);
 
@@ -1264,7 +1286,6 @@ void Renderer::Render_W4_Part1() //shading
 						float w2 = std::abs({ Vector2::Cross(v3v1, position - v3) / 2 / totalArea });
 						float w3 = std::abs({ Vector2::Cross(v1v2, position - v1) / 2 / totalArea });
 
-
 						float depth{ 1 / ((w1 / vertex1.position.z) + (w2 / vertex2.position.z) + (w3 / vertex3.position.z)) };
 
 						int currentPixel{ px + py * m_Width };
@@ -1278,26 +1299,39 @@ void Renderer::Render_W4_Part1() //shading
 									m_pDepthBufferPixels[currentPixel] = depth;
 
 									float w{ 1 / ((w1 / vertex1.position.w) + (w2 / vertex2.position.w) + (w3 / vertex3.position.w)) };
+									auto uv = ((vertex1.uv / vertex1.position.w) * w1 + (vertex2.uv / vertex2.position.w) * w2 + (vertex3.uv / vertex3.position.w) * w3) * w;
 
-									Vector3 interpolatedNormal{ ((vertex1.normal / vertex1.position.w) * w1 + (vertex2.normal / vertex2.position.w) * w2 + (vertex3.normal / vertex3.position.w) * w3) * w };
-									Vector3 interpolatedTangent{ ((vertex1.tangent / vertex1.position.w) * w1 + (vertex2.tangent / vertex2.position.w) * w2 + (vertex3.tangent / vertex3.position.w) * w3) * w };
-									Vector3 binormal{ Vector3::Cross(interpolatedNormal, interpolatedTangent) };
-									Matrix tangentSpaceAxis{ Matrix{interpolatedTangent, binormal, interpolatedNormal, {0, 0, 1}} };
+									Vector3 normal{ ((vertex1.normal / vertex1.position.w) * w1 + (vertex2.normal / vertex2.position.w) * w2 + (vertex3.normal / vertex3.position.w) * w3) * w };
+									const Vector3 tangent{ ((vertex1.tangent / vertex1.position.w) * w1 + (vertex2.tangent / vertex2.position.w) * w2 + (vertex3.tangent / vertex3.position.w) * w3) * w };
+									const Vector3 viewDir{ ((vertex1.viewDirection / vertex1.position.w) * w1 + (vertex2.viewDirection / vertex2.position.w) * w2 + (vertex3.viewDirection / vertex3.position.w) * w3) * w };
+									const Vector4 position{ ((vertex1.position * w1) + (vertex2.position * w2) + (vertex3.position * w3)) * w };
+									const Vector3 binormal{ Vector3::Cross(normal, tangent) };
+									const Matrix tangentSpaceAxis{ Matrix{tangent, binormal, normal, {0, 0, 1}} };
 									
-									
-									PixelShading(&vertex1);
+									//ColorRGB sampledNormal{ m_pNormal->Sample(uv) };
+									//normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
+									//normal = tangentSpaceAxis.TransformVector(normal);
+									//normal /= 255.f;
+									//normal *= 2.f - 1.f;
 
-									//if (m_CurrentTextureMode == TextureMode::texture)
-									//{										
-									//	auto uv = ((vertex1.uv / vertex1.position.w) * w1 + (vertex2.uv / vertex2.position.w) * w2 + (vertex3.uv / vertex3.position.w) * w3) * w;
+									Vertex_Out pixel;
+									pixel.position = position;
+									pixel.uv = uv;
+									pixel.tangent = tangent;
+									pixel.normal = normal;
+									pixel.viewDirection = viewDir;		
+									//pixel.color = m_pDiffuse->Sample(uv);
+								
+									finalColor = PixelShading(&pixel);
+
+									//if (m_CurrentTextureMode == TextureMode::texture)											
 									//	finalColor = m_pTexture->Sample(uv);
-									//}
 									//else
 									//{
-										depth = Remap(depth);
-										finalColor = { depth, depth, depth };
+										//depth = Remap(depth);
+										//finalColor = { depth, depth, depth };
 									//}
-
+									
 									//Update Color in Buffer
 									m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
 										static_cast<uint8_t>(finalColor.r * 255),
@@ -1333,38 +1367,20 @@ void dae::Renderer::ConvertToRasterSpace(Vertex_Out& vertex)
 
 ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 {
+	ColorRGB finalColor{};
 	Vector3 lightDirection = { 0.577f, -0.577f, 0.577f };
 	const float lambertLaw{ Vector3::Dot(vertex->normal, lightDirection.Normalized()) };
-	ColorRGB brdf = vertex->color / float(M_PI);
+	ColorRGB observedArea{};
+	//ColorRGB brdf = (vertex->color * 10.f) / float(M_PI);
 
 	//observed area
 	if (lambertLaw > 0)
-		brdf += {lambertLaw, lambertLaw, lambertLaw};
+		observedArea = { lambertLaw, lambertLaw, lambertLaw };
+	else
+		observedArea = { 0,0,0 };
 
-	return brdf;
-
-	/*const float lambertLaw{ Vector3::Dot(closestHit.normal, direction.Normalized()) };
-	* 
-	const ColorRGB radiance{ LightUtils::GetRadiance(light, startPoint) };
-	const ColorRGB brdf{ materials[closestHit.materialIndex]->Shade(closestHit, lightRay.direction, -rayDirection) };
-
-	switch (m_CurrentLightingMode)
-	{
-	case LightingMode::ObservedArea:
-		if (lambertLaw > 0)
-			finalColor += {lambertLaw, lambertLaw, lambertLaw};
-		break;
-	case LightingMode::Radiance:
-		finalColor += radiance;
-		break;
-	case LightingMode::BRDF:
-		finalColor += brdf;
-		break;
-	case LightingMode::Combined:
-		if (lambertLaw > 0)
-			finalColor += radiance * brdf * lambertLaw;
-		break;
-	}*/
+	finalColor = observedArea;
+	return finalColor;
 }
 
 void dae::Renderer::CycleTexture()
@@ -1416,7 +1432,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 	for ( auto& mesh : meshes_in)
 	{
 		mesh.vertices_out.resize(mesh.vertices.size());
-		//mesh.worldMatrix.CreateRotationY();
+		mesh.worldMatrix.CreateTranslation(0, 0, 50.f);
 		Matrix worldViewProjMatrix = mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix;
 
 		for (int i = 0; i < int(mesh.vertices.size()); ++i)

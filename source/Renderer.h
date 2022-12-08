@@ -73,6 +73,10 @@ namespace dae
 		int m_Height{};
 
 		Texture* m_pTexture{};
+		Texture* m_pNormal{};
+		Texture* m_pDiffuse{};
+		Texture* m_pGloss{};
+		Texture* m_pSpecular{};
 
 		enum class TextureMode
 		{
@@ -81,7 +85,7 @@ namespace dae
 
 		TextureMode m_CurrentTextureMode{ TextureMode::texture };
 
-		Matrix m_WorldMatrix;
+		std::vector<Mesh> m_Meshes;
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; 
