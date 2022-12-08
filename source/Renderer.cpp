@@ -1369,7 +1369,7 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 {
 	ColorRGB finalColor{};
 	Vector3 lightDirection = { 0.577f, -0.577f, 0.577f };
-	const float lambertLaw{ Vector3::Dot(vertex->normal, lightDirection.Normalized()) };
+	const float lambertLaw{ Vector3::Dot(-vertex->normal, lightDirection.Normalized()) };
 	ColorRGB observedArea{};
 	//ColorRGB brdf = (vertex->color * 10.f) / float(M_PI);
 
@@ -1432,7 +1432,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 	for ( auto& mesh : meshes_in)
 	{
 		mesh.vertices_out.resize(mesh.vertices.size());
-		mesh.worldMatrix.CreateTranslation(0, 0, 50.f);
+		//mesh.worldMatrix.CreateTranslation(0, 0, 50.f);
 		Matrix worldViewProjMatrix = mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix;
 
 		for (int i = 0; i < int(mesh.vertices.size()); ++i)
