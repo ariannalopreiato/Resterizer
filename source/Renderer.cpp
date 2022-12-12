@@ -1163,7 +1163,7 @@ void Renderer::Render_W3_Part2() //depth interpolation
 								{
 									m_pDepthBufferPixels[currentPixel] = depth;
 
-									if (m_CurrentTextureMode == TextureMode::texture)
+									if (m_IsShowingTexture)
 									{
 										float w{ 1 / ((w1 / vertex1.position.w) + (w2 / vertex2.position.w) + (w3 / vertex3.position.w)) };
 										auto uv = ((vertex1.uv / vertex1.position.w) * w1 + (vertex2.uv / vertex2.position.w) * w2 + (vertex3.uv / vertex3.position.w) * w3) * w;
@@ -1308,11 +1308,14 @@ void Renderer::Render_W4_Part1() //shading
 									const Vector3 binormal{ Vector3::Cross(normal, tangent) };
 									const Matrix tangentSpaceAxis{ Matrix{tangent, binormal, normal, {0, 0, 1}} };
 									
-									//ColorRGB sampledNormal{ m_pNormal->Sample(uv) };
-									//normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
-									//normal = tangentSpaceAxis.TransformVector(normal);
-									//normal /= 255.f;
-									//normal *= 2.f - 1.f;
+									if (m_IsUsingNormalMap)
+									{
+										ColorRGB sampledNormal{ m_pNormal->Sample(uv) };
+										normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
+										normal = tangentSpaceAxis.TransformVector(normal);
+										normal /= 255.f;
+										normal *= 2.f - 1.f;
+									}
 
 									Vertex_Out pixel;
 									pixel.position = position;
@@ -1320,7 +1323,7 @@ void Renderer::Render_W4_Part1() //shading
 									pixel.tangent = tangent;
 									pixel.normal = normal;
 									pixel.viewDirection = viewDir;		
-									//pixel.color = m_pDiffuse->Sample(uv);
+									pixel.color = m_pDiffuse->Sample(uv);
 								
 									finalColor = PixelShading(&pixel);
 
@@ -1370,28 +1373,73 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 	ColorRGB finalColor{};
 	Vector3 lightDirection = { 0.577f, -0.577f, 0.577f };
 	const float lambertLaw{ Vector3::Dot(-vertex->normal, lightDirection.Normalized()) };
-	ColorRGB observedArea{};
-	//ColorRGB brdf = (vertex->color * 10.f) / float(M_PI);
+	float lightIntensity{ 7.f };
+	//float shiny{ 25.f };
+	//ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
 
 	//observed area
+	ColorRGB observedArea{};
 	if (lambertLaw > 0)
 		observedArea = { lambertLaw, lambertLaw, lambertLaw };
 	else
 		observedArea = { 0,0,0 };
 
-	finalColor = observedArea;
+	//lambert
+	ColorRGB lambert{ (vertex->color * lightIntensity) / float(M_PI) };
+
+	//phong
+	/*const Vector3 reflect{ Vector3::Reflect(vertex->normal, lightDirection.Normalized()) };
+	const float cosine{ std::max(0.f, Vector3::Dot(reflect, v)) };
+	const float phong{ ks * pow(cosine, exp) };
+	ColorRGB phongColor{ phong, phong, phong };*/
+
+	switch (m_ShadingMode)
+	{
+	case ShadingMode::combined:
+		finalColor = observedArea * lambert;
+		break;
+	case ShadingMode::observedArea:
+		finalColor = observedArea;
+		break;
+	case ShadingMode::diffuse:
+		break;
+	case ShadingMode::specular:
+		break;
+	}
 	return finalColor;
 }
 
 void dae::Renderer::CycleTexture()
 {
-	switch (m_CurrentTextureMode)
+	m_IsShowingTexture = !m_IsShowingTexture;
+}
+
+void dae::Renderer::ToggleRotation()
+{
+	m_IsRotating = !m_IsRotating;
+}
+
+void dae::Renderer::ToggleNormalMap()
+{
+	m_IsUsingNormalMap = !m_IsUsingNormalMap;
+}
+
+void dae::Renderer::CycleShadingMode()
+{
+	switch (m_ShadingMode)
 	{
-	case TextureMode::depthBuffer:
-		m_CurrentTextureMode = TextureMode::texture;
+	case ShadingMode::combined:
+		m_ShadingMode = ShadingMode::observedArea;
 		break;
-	case TextureMode::texture:
-		m_CurrentTextureMode = TextureMode::depthBuffer;
+	case ShadingMode::observedArea:
+		m_ShadingMode = ShadingMode::diffuse;
+		break;
+	case ShadingMode::diffuse:
+		m_ShadingMode = ShadingMode::specular;
+		break;
+	case ShadingMode::specular:
+		m_ShadingMode = ShadingMode::combined;
+		break;
 	}
 }
 

@@ -54,6 +54,12 @@ namespace dae
 
 		void CycleTexture();
 
+		void ToggleRotation();
+
+		void ToggleNormalMap();
+
+		void CycleShadingMode();
+
 		float Remap(float depth, float min = 0.985f, float max = 1.f);
 
 		bool SaveBufferToImage() const;
@@ -78,12 +84,16 @@ namespace dae
 		Texture* m_pGloss{};
 		Texture* m_pSpecular{};
 
-		enum class TextureMode
+		bool m_IsShowingTexture{ true };
+		bool m_IsRotating{ false };
+		bool m_IsUsingNormalMap{ false };
+
+		enum class ShadingMode
 		{
-			texture, depthBuffer
+			observedArea, diffuse, specular, combined
 		};
 
-		TextureMode m_CurrentTextureMode{ TextureMode::texture };
+		ShadingMode m_ShadingMode{ ShadingMode::combined };
 
 		std::vector<Mesh> m_Meshes;
 

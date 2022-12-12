@@ -32,7 +32,7 @@ int main(int argc, char* args[])
 	const uint32_t height = 480;
 
 	SDL_Window* pWindow = SDL_CreateWindow(
-		"Rasterizer - W6 DEMO",
+		"Rasterizer - Arianna Lopreiato 2DAE08",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
 		width, height, 0);
@@ -65,6 +65,13 @@ int main(int argc, char* args[])
 					takeScreenshot = true;
 				if (e.key.keysym.scancode == SDL_SCANCODE_F4)
 					pRenderer->CycleTexture();
+				if (e.key.keysym.scancode == SDL_SCANCODE_F5)
+					pRenderer->ToggleRotation();
+				if (e.key.keysym.scancode == SDL_SCANCODE_F6)
+					pRenderer->ToggleNormalMap();
+				if (e.key.keysym.scancode == SDL_SCANCODE_F7)
+					pRenderer->CycleShadingMode();
+
 				break;
 			}
 		}
