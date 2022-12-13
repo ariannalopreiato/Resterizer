@@ -40,7 +40,6 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	/*std::vector<Vertex> verticesTuktuk{};
 	std::vector<uint32_t> indicesTuktuk{};
 	Utils::ParseOBJ("Resources/tuktuk.obj", verticesTuktuk, indicesTuktuk);*/
-	//define mesh
 
 	//define mesh
 	std::vector<Mesh> meshes_world
@@ -61,7 +60,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		}
 
 		//tuktuk
-		/*,Mesh{
+		/*Mesh{
 			verticesTuktuk,
 			indicesTuktuk,
 			PrimitiveTopology::TriangleList,
@@ -117,7 +116,7 @@ void Renderer::Render()
 	//Render_W3_Part1();
 	//Render_W3_Part2();
 
-	//Render_W4_Part1();
+	Render_W4_Part1();
 
 	//@END
 	//Update SDL Surface
@@ -1338,7 +1337,7 @@ void Renderer::Render_W4_Part1() //shading
 									pixel.tangent = tangent;
 									pixel.normal = normal.Normalized();
 									pixel.viewDirection = viewDir;		
-									//pixel.color = m_pDiffuse->Sample(uv);
+									pixel.color = m_pDiffuse->Sample(uv);
 								
 									finalColor = PixelShading(&pixel);
 
@@ -1393,12 +1392,10 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 	//ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
 
 	//observed area
-	ColorRGB observedArea{};
-
-	observedArea = { lambertLaw, lambertLaw, lambertLaw };
+	ColorRGB observedArea{ lambertLaw, lambertLaw, lambertLaw };
 
 	//lambert
-	//ColorRGB lambert{ (vertex->color * lightIntensity) / float(M_PI) };
+	ColorRGB lambert{ (vertex->color * lightIntensity) / float(M_PI) };
 
 	//phong
 	/*const Vector3 reflect{ Vector3::Reflect(vertex->normal, lightDirection.Normalized()) };
@@ -1409,7 +1406,7 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 	switch (m_ShadingMode)
 	{
 	case ShadingMode::combined:
-		//finalColor = observedArea * lambert;
+		finalColor = observedArea * lambert;
 		break;
 	case ShadingMode::observedArea:
 		finalColor = observedArea;
@@ -1493,7 +1490,8 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 	for ( auto& mesh : meshes_in)
 	{
 		mesh.vertices_out.resize(mesh.vertices.size());
-		mesh.worldMatrix = Matrix::CreateTranslation(0, 0, 50.f);
+		mesh.worldMatrix = Matrix::CreateRotationY(1.57f) * Matrix::CreateTranslation(0, 0, 50.f);
+
 		Matrix worldViewProjMatrix = mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix;
 
 		for (int i = 0; i < int(mesh.vertices.size()); ++i)
