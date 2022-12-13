@@ -198,10 +198,10 @@ namespace dae {
 
 	Matrix Matrix::CreateTranslation(float x, float y, float z)
 	{
-		Vector4 xAxis{ 1.f, 0.f, 0.f , x };
-		Vector4 yAxis{ 0.f, 1.f, 0.f , y };
-		Vector4 zAxis{ 0.f, 0.f, 1.f , z };
-		Vector4 t{ 0.f, 0.f, 0.f, 1.f };
+		Vector4 xAxis{ 1.f, 0.f, 0.f , 0.f };
+		Vector4 yAxis{ 0.f, 1.f, 0.f , 0.f };
+		Vector4 zAxis{ 0.f, 0.f, 1.f , 0.f };
+		Vector4 t{ x, y, z, 1.f };
 		return Matrix{ xAxis, yAxis, zAxis, t };
 	}
 

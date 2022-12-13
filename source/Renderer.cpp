@@ -32,6 +32,43 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	//Initialize Camera
 	m_Camera.Initialize({ float(m_Width) / float(m_Height) }, 45.f, { 0, 0, 0 });
+
+	std::vector<Vertex> vertices{};
+	std::vector<uint32_t> indices{};
+	Utils::ParseOBJ("Resources/vehicle.obj", vertices, indices);
+
+	/*std::vector<Vertex> verticesTuktuk{};
+	std::vector<uint32_t> indicesTuktuk{};
+	Utils::ParseOBJ("Resources/tuktuk.obj", verticesTuktuk, indicesTuktuk);*/
+	//define mesh
+
+	//define mesh
+	std::vector<Mesh> meshes_world
+	{
+		//vehicle
+		Mesh{
+			vertices,
+			indices,
+			PrimitiveTopology::TriangleList,
+			{}, //vertices out
+
+			{ //world matrix
+				{1, 0, 0, 0},
+				{0, 1, 0, 0},
+				{0, 0, 1, 0},
+				{0, 0, 0, 1}
+			}
+		}
+
+		//tuktuk
+		/*,Mesh{
+			verticesTuktuk,
+			indicesTuktuk,
+			PrimitiveTopology::TriangleList,
+		}*/
+	};
+
+	m_Meshes = meshes_world;
 }
 
 Renderer::~Renderer()
@@ -80,7 +117,7 @@ void Renderer::Render()
 	//Render_W3_Part1();
 	//Render_W3_Part2();
 
-	Render_W4_Part1();
+	//Render_W4_Part1();
 
 	//@END
 	//Update SDL Surface
@@ -1194,33 +1231,11 @@ void Renderer::Render_W4_Part1() //shading
 {
 	ColorRGB finalColor{};
 
-	std::vector<Vertex> vertices{};
-	std::vector<uint32_t> indices{};
-	Utils::ParseOBJ("Resources/vehicle.obj", vertices, indices);
-	//define mesh
-	std::vector<Mesh> meshes_world
-	{
-		Mesh{
-			vertices,
-			indices,
-			PrimitiveTopology::TriangleList,
-			{}, //vertices out
-
-			{ //world matrix
-				{1, 0, 0, 0},
-				{0, 1, 0, 0},
-				{0, 0, 1, 0},
-				{0, 0, 0, 1}
-			}
-		}
-	};
-
-	//m_Meshes = meshes_world;
 	//projection stage -> convert all the vertices to NDC
-	VertexTransformationFunction(meshes_world);
+	VertexTransformationFunction(m_Meshes);
 
 	//for every mesh
-	for (const auto& mesh : meshes_world)
+	for (const auto& mesh : m_Meshes)
 	{
 		//all the converted vertices
 		std::vector<Vertex_Out> vertices = mesh.vertices_out;
@@ -1305,11 +1320,11 @@ void Renderer::Render_W4_Part1() //shading
 									const Vector3 tangent{ ((vertex1.tangent / vertex1.position.w) * w1 + (vertex2.tangent / vertex2.position.w) * w2 + (vertex3.tangent / vertex3.position.w) * w3) * w };
 									const Vector3 viewDir{ ((vertex1.viewDirection / vertex1.position.w) * w1 + (vertex2.viewDirection / vertex2.position.w) * w2 + (vertex3.viewDirection / vertex3.position.w) * w3) * w };
 									const Vector4 position{ ((vertex1.position * w1) + (vertex2.position * w2) + (vertex3.position * w3)) * w };
-									const Vector3 binormal{ Vector3::Cross(normal, tangent) };
-									const Matrix tangentSpaceAxis{ Matrix{tangent, binormal, normal, {0, 0, 1}} };
-									
+																	
 									if (m_IsUsingNormalMap)
 									{
+										const Vector3 binormal{ Vector3::Cross(normal, tangent) };
+										const Matrix tangentSpaceAxis{ Matrix{tangent, binormal, normal, {0, 0, 1}} };
 										ColorRGB sampledNormal{ m_pNormal->Sample(uv) };
 										normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
 										normal = tangentSpaceAxis.TransformVector(normal);
@@ -1321,9 +1336,9 @@ void Renderer::Render_W4_Part1() //shading
 									pixel.position = position;
 									pixel.uv = uv;
 									pixel.tangent = tangent;
-									pixel.normal = normal;
+									pixel.normal = normal.Normalized();
 									pixel.viewDirection = viewDir;		
-									pixel.color = m_pDiffuse->Sample(uv);
+									//pixel.color = m_pDiffuse->Sample(uv);
 								
 									finalColor = PixelShading(&pixel);
 
@@ -1372,20 +1387,18 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 {
 	ColorRGB finalColor{};
 	Vector3 lightDirection = { 0.577f, -0.577f, 0.577f };
-	const float lambertLaw{ Vector3::Dot(-vertex->normal, lightDirection.Normalized()) };
+	const float lambertLaw{ Saturate(Vector3::Dot(vertex->normal, -lightDirection.Normalized())) };
 	float lightIntensity{ 7.f };
 	//float shiny{ 25.f };
 	//ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
 
 	//observed area
 	ColorRGB observedArea{};
-	if (lambertLaw > 0)
-		observedArea = { lambertLaw, lambertLaw, lambertLaw };
-	else
-		observedArea = { 0,0,0 };
+
+	observedArea = { lambertLaw, lambertLaw, lambertLaw };
 
 	//lambert
-	ColorRGB lambert{ (vertex->color * lightIntensity) / float(M_PI) };
+	//ColorRGB lambert{ (vertex->color * lightIntensity) / float(M_PI) };
 
 	//phong
 	/*const Vector3 reflect{ Vector3::Reflect(vertex->normal, lightDirection.Normalized()) };
@@ -1396,7 +1409,7 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
 	switch (m_ShadingMode)
 	{
 	case ShadingMode::combined:
-		finalColor = observedArea * lambert;
+		//finalColor = observedArea * lambert;
 		break;
 	case ShadingMode::observedArea:
 		finalColor = observedArea;
@@ -1480,7 +1493,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 	for ( auto& mesh : meshes_in)
 	{
 		mesh.vertices_out.resize(mesh.vertices.size());
-		mesh.worldMatrix.CreateTranslation(0, 0, 50.f);
+		mesh.worldMatrix = Matrix::CreateTranslation(0, 0, 50.f);
 		Matrix worldViewProjMatrix = mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix;
 
 		for (int i = 0; i < int(mesh.vertices.size()); ++i)
@@ -1497,8 +1510,8 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 			 mesh.vertices_out[i].position.w = v.w;
 
 			 //normals and tangents only use the world matrix
-			 mesh.vertices_out[i].normal = mesh.worldMatrix.TransformPoint(mesh.vertices[i].normal);
-			 mesh.vertices_out[i].tangent = mesh.worldMatrix.TransformPoint(mesh.vertices[i].tangent);
+			 mesh.vertices_out[i].normal = mesh.worldMatrix.TransformVector(mesh.vertices[i].normal);
+			 mesh.vertices_out[i].tangent = mesh.worldMatrix.TransformVector(mesh.vertices[i].tangent);
 
 			//pass uv coordinate
 			mesh.vertices_out[i].uv = mesh.vertices[i].uv;			

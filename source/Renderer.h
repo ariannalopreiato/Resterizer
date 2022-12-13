@@ -93,7 +93,7 @@ namespace dae
 			observedArea, diffuse, specular, combined
 		};
 
-		ShadingMode m_ShadingMode{ ShadingMode::combined };
+		ShadingMode m_ShadingMode{ ShadingMode::observedArea };
 
 		std::vector<Mesh> m_Meshes;
 
