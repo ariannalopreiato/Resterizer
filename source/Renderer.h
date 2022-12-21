@@ -50,7 +50,7 @@ namespace dae
 
 		void ConvertToRasterSpace(Vertex_Out& vertex);
 
-		ColorRGB PixelShading(const Vertex_Out* vertex);
+		ColorRGB PixelShading(Vertex_Out* vertex);
 
 		void CycleTexture();
 
@@ -93,7 +93,9 @@ namespace dae
 			observedArea, diffuse, specular, combined
 		};
 
-		ShadingMode m_ShadingMode{ ShadingMode::observedArea };
+		ShadingMode m_ShadingMode{ ShadingMode::combined };
+
+		float m_RotationAngle{};
 
 		std::vector<Mesh> m_Meshes;
 

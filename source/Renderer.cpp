@@ -35,11 +35,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	std::vector<Vertex> vertices{};
 	std::vector<uint32_t> indices{};
+
 	Utils::ParseOBJ("Resources/vehicle.obj", vertices, indices);
 
-	/*std::vector<Vertex> verticesTuktuk{};
-	std::vector<uint32_t> indicesTuktuk{};
-	Utils::ParseOBJ("Resources/tuktuk.obj", verticesTuktuk, indicesTuktuk);*/
+	//Utils::ParseOBJ("Resources/tuktuk.obj", vertices, indices);
 
 	//define mesh
 	std::vector<Mesh> meshes_world
@@ -61,8 +60,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 		//tuktuk
 		/*Mesh{
-			verticesTuktuk,
-			indicesTuktuk,
+			vertices,
+			indices,
 			PrimitiveTopology::TriangleList,
 		}*/
 	};
@@ -72,6 +71,9 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 Renderer::~Renderer()
 {
+	delete m_pTexture;
+	m_pTexture = nullptr;
+
 	delete m_pNormal;
 	m_pNormal = nullptr;
 
@@ -90,6 +92,7 @@ Renderer::~Renderer()
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
+	m_RotationAngle += 0.0174533 / pTimer->GetElapsed();
 }
 
 void Renderer::Render()
@@ -1177,7 +1180,7 @@ void Renderer::Render_W3_Part2() //depth interpolation
 					auto signedArea3{ Vector2::Cross(v3v1, position - v3) };
 
 					//if pixel is in triangle
-					if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+					if (signedArea1 >= 0 && signedArea2 >= 0 && signedArea3 >= 0)
 					{
 						//view space
 						float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
@@ -1245,9 +1248,9 @@ void Renderer::Render_W4_Part1() //shading
 			//----------------------------------------------------------------------------------------------------
 			// USING TRIANGLE LIST
 			//----------------------------------------------------------------------------------------------------			
-			Vertex_Out vertex1 = vertices[mesh.indices[i]];
-			Vertex_Out vertex2 = vertices[mesh.indices[++i]];
-			Vertex_Out vertex3 = vertices[mesh.indices[++i]];
+			Vertex_Out vertex1{ vertices[mesh.indices[i]] };
+			Vertex_Out vertex2{ vertices[mesh.indices[++i]] };
+			Vertex_Out vertex3{ vertices[mesh.indices[++i]] };
 			//----------------------------------------------------------------------------------------------------
 			//----------------------------------------------------------------------------------------------------
 
@@ -1262,9 +1265,9 @@ void Renderer::Render_W4_Part1() //shading
 			ConvertToRasterSpace(vertex3);
 
 			//edges
-			const Vector2 v1 = { vertex1.position.x, vertex1.position.y };
-			const Vector2 v2 = { vertex2.position.x, vertex2.position.y };
-			const Vector2 v3 = { vertex3.position.x, vertex3.position.y };
+			const Vector2 v1 { vertex1.position.x, vertex1.position.y };
+			const Vector2 v2 { vertex2.position.x, vertex2.position.y };
+			const Vector2 v3 { vertex3.position.x, vertex3.position.y };
 			const Vector2 v1v2{ v2 - v1 };
 			const Vector2 v2v3{ v3 - v2 };
 			const Vector2 v3v1{ v1 - v3 };
@@ -1290,7 +1293,7 @@ void Renderer::Render_W4_Part1() //shading
 					auto signedArea3{ Vector2::Cross(v3v1, position - v3) };
 
 					//if pixel is in triangle
-					if (signedArea1 > 0 && signedArea2 > 0 && signedArea3 > 0)
+					if (signedArea1 >= 0 && signedArea2 >= 0 && signedArea3 >= 0)
 					{
 						//view space
 						float totalArea{ Vector2::Cross(v3v1, v1v2) / 2 };
@@ -1322,32 +1325,30 @@ void Renderer::Render_W4_Part1() //shading
 																	
 									if (m_IsUsingNormalMap)
 									{
-										const Vector3 binormal{ Vector3::Cross(normal, tangent) };
-										const Matrix tangentSpaceAxis{ Matrix{tangent, binormal, normal, {0, 0, 1}} };
-										ColorRGB sampledNormal{ m_pNormal->Sample(uv) };
-										normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
-										normal = tangentSpaceAxis.TransformVector(normal);
-										normal /= 255.f;
-										normal *= 2.f - 1.f;
+										const Vector3 binormal{ Vector3::Cross(normal, tangent)};
+										const Matrix tangentSpaceAxis{ Matrix{tangent, binormal, normal, Vector3::Zero} };
+										ColorRGB sampledNormal{ m_pNormal->Sample(uv) };		
+										sampledNormal = 2.f * sampledNormal - ColorRGB{1, 1, 1};
+										normal = tangentSpaceAxis.TransformVector({ sampledNormal.r, sampledNormal.g, sampledNormal.b });
 									}
 
 									Vertex_Out pixel;
 									pixel.position = position;
 									pixel.uv = uv;
 									pixel.tangent = tangent;
-									pixel.normal = normal.Normalized();
+									pixel.normal = normal;
 									pixel.viewDirection = viewDir;		
 									pixel.color = m_pDiffuse->Sample(uv);
-								
-									finalColor = PixelShading(&pixel);
 
-									//if (m_CurrentTextureMode == TextureMode::texture)											
-									//	finalColor = m_pTexture->Sample(uv);
-									//else
-									//{
-										//depth = Remap(depth);
-										//finalColor = { depth, depth, depth };
-									//}
+									if (m_IsShowingTexture)
+										pixel.color = m_pDiffuse->Sample(uv);
+									else
+									{
+										depth = Remap(depth);
+										pixel.color = { depth, depth, depth };
+									}
+						
+									finalColor = PixelShading(&pixel);									
 									
 									//Update Color in Buffer
 									m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
@@ -1382,40 +1383,45 @@ void dae::Renderer::ConvertToRasterSpace(Vertex_Out& vertex)
 	vertex.position.y = ((1 - vertex.position.y) / 2) * m_Height;
 }
 
-ColorRGB dae::Renderer::PixelShading(const Vertex_Out* vertex)
+ColorRGB dae::Renderer::PixelShading(Vertex_Out* vertex)
 {
 	ColorRGB finalColor{};
-	Vector3 lightDirection = { 0.577f, -0.577f, 0.577f };
-	const float lambertLaw{ Saturate(Vector3::Dot(vertex->normal, -lightDirection.Normalized())) };
+	Vector3 lightDirection = Vector3{ 0.577f, -0.577f, 0.577f }.Normalized();
+	const float lambertLaw{ Saturate(Vector3::Dot(vertex->normal, -lightDirection)) };
 	float lightIntensity{ 7.f };
-	//float shiny{ 25.f };
-	//ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+	float shininess{ 25.f };
+	ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+	ColorRGB specularColor{ m_pSpecular->Sample(vertex->uv) };
+	ColorRGB phongExponent{ m_pGloss->Sample(vertex->uv) * shininess };
 
 	//observed area
 	ColorRGB observedArea{ lambertLaw, lambertLaw, lambertLaw };
 
 	//lambert
-	ColorRGB lambert{ (vertex->color * lightIntensity) / float(M_PI) };
+	ColorRGB lambert{ (lambertLaw * vertex->color * lightIntensity) / float(M_PI) };
 
 	//phong
-	/*const Vector3 reflect{ Vector3::Reflect(vertex->normal, lightDirection.Normalized()) };
-	const float cosine{ std::max(0.f, Vector3::Dot(reflect, v)) };
-	const float phong{ ks * pow(cosine, exp) };
-	ColorRGB phongColor{ phong, phong, phong };*/
+	const Vector3 reflect{ Vector3::Reflect(vertex->normal, -lightDirection) };
+	const float cosine{ std::max(0.f, Vector3::Dot(reflect, vertex->viewDirection)) };
+	const auto phong{ specularColor * powf(cosine, phongExponent.r) };
 
 	switch (m_ShadingMode)
 	{
 	case ShadingMode::combined:
-		finalColor = observedArea * lambert;
+		finalColor = { ambient + (lambert * observedArea) + phong };
 		break;
 	case ShadingMode::observedArea:
 		finalColor = observedArea;
 		break;
 	case ShadingMode::diffuse:
+		finalColor = observedArea * lambert;
 		break;
 	case ShadingMode::specular:
+		finalColor = phong;
 		break;
 	}
+
+	finalColor.MaxToOne();
 	return finalColor;
 }
 
@@ -1490,7 +1496,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 	for ( auto& mesh : meshes_in)
 	{
 		mesh.vertices_out.resize(mesh.vertices.size());
-		mesh.worldMatrix = Matrix::CreateRotationY(1.57f) * Matrix::CreateTranslation(0, 0, 50.f);
+		mesh.worldMatrix = Matrix::CreateRotationY(m_RotationAngle) * Matrix::CreateTranslation(0, 0, 50.f);
 
 		Matrix worldViewProjMatrix = mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix;
 
@@ -1501,15 +1507,19 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_in) const
 			 v.x /= v.w;
 			 v.y /= v.w;
 			 v.z /= v.w;
-
+			
 			 mesh.vertices_out[i].position.x = v.x; //[-1, 1]
 			 mesh.vertices_out[i].position.y = v.y; //[-1, 1]
 			 mesh.vertices_out[i].position.z = v.z; //[0, 1]
-			 mesh.vertices_out[i].position.w = v.w;
+			 mesh.vertices_out[i].position.w = v.w;		
 
 			 //normals and tangents only use the world matrix
 			 mesh.vertices_out[i].normal = mesh.worldMatrix.TransformVector(mesh.vertices[i].normal);
 			 mesh.vertices_out[i].tangent = mesh.worldMatrix.TransformVector(mesh.vertices[i].tangent);
+
+			 //calculate view direction
+			 Vector3 pos{ mesh.vertices_out[i].position };
+			 mesh.vertices_out[i].viewDirection = (m_Camera.origin - pos).Normalized();
 
 			//pass uv coordinate
 			mesh.vertices_out[i].uv = mesh.vertices[i].uv;			

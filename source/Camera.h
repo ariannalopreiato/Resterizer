@@ -62,13 +62,6 @@ namespace dae
 			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
 		}
 
-		/*void CalculateWorldMatrix()
-		{
-			right = Vector3::Cross({ 0, 1, 0 }, forward).Normalized();
-			up = Vector3::Cross(forward, right).Normalized();
-			worldMatrix = { right, up, forward, origin };
-		}*/
-
 		void Update(Timer* pTimer)
 		{
 			const float deltaTime = pTimer->GetElapsed();
@@ -126,10 +119,6 @@ namespace dae
 			//Update Matrices
 			CalculateViewMatrix();
 			CalculateProjectionMatrix(); //Try to optimize this - should only be called once or when fov/aspectRatio changes
-			//CalculateWorldMatrix();
-			//const Matrix rotation{ Matrix::CreateRotation(totalPitch, totalYaw, 0.f) };
-			//forward = rotation.TransformVector(Vector3::UnitZ);
-			//forward.Normalize();
 		}
 	};
 }
